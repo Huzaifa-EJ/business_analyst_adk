@@ -255,61 +255,6 @@ def get_business_data_from_db(user_id='demo_user'):
     finally:
         conn.close()
 
-# USER TOOLS
-def create_user(user_id: str, name: str, tool_context: ToolContext, email: str, 
-               company: str, phone: str) -> dict:
-    """Create a new user account.
-
-    Args:
-        user_id: Unique user identifier
-        name: User's full name
-        tool_context: Context for accessing session state
-        email: User's email address
-        company: User's company name
-        phone: User's phone number
-
-    Returns:
-        Dictionary containing the result of creating the user
-    """
-    print(f"--- Tool: create_user called for: {name} ({user_id}) ---")
-    
-    db_path = SESSIONS_DB.replace("sqlite:///", "")
-    
-    try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        cursor.execute("PRAGMA foreign_keys = ON")
-        
-        cursor.execute('''
-            INSERT INTO user (id, name, email, company, phone)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (user_id, name, email, company, phone))
-        
-        conn.commit()
-        
-        return {
-            "action": "create_user",
-            "status": "success",
-            "user_id": user_id,
-            "name": name,
-            "email": email,
-            "company": company,
-            "phone": phone,
-            "message": f"Successfully created user: {name}"
-        }
-        
-    except Exception as e:
-        if conn:
-            conn.rollback()
-        return {
-            "action": "create_user",
-            "status": "error",
-            "error": str(e),
-            "message": f"Failed to create user: {name}"
-        }
-    finally:
-        if conn:
-            conn.close()
 
 def get_business_insights(tool_context: ToolContext) -> dict:
     """Generate comprehensive business insights from all available data.
@@ -411,6 +356,19 @@ def create_contact(name: str, tool_context: ToolContext, email: str, phone: str,
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         cursor.execute("PRAGMA foreign_keys = ON")
+        
+        # Check if user exists, if not create them
+        cursor.execute("SELECT id FROM user WHERE id = ?", (user_id,))
+        user_exists = cursor.fetchone()
+        
+        if not user_exists:
+            print(f"User {user_id} doesn't exist, creating user entry...")
+            # Create user entry with minimal required information
+            cursor.execute('''
+                INSERT INTO user (id, name, email, company, phone)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (user_id, user_id.replace('_', ' ').title(), f"{user_id}@example.com", "Unknown Company", "000-000-0000"))
+            print(f"Created user entry for {user_id}")
         
         cursor.execute('''
             INSERT INTO contact (user_id, name, email, phone, company, notes, status)
@@ -574,216 +532,6 @@ def update_contact(contact_id: int, tool_context: ToolContext, name: str, email:
         if conn:
             conn.close()
 
-# CONTACT LOOKUP TOOLS
-def find_contact_by_name(name: str, tool_context: ToolContext) -> dict:
-    """Find contact by name (supports partial matching).
-
-    Args:
-        name: Contact's name (can be partial)
-        tool_context: Context for accessing session state
-
-    Returns:
-        Dictionary containing matching contacts
-    """
-    print(f"--- Tool: find_contact_by_name called for: {name} ---")
-    
-    user_id = tool_context.state.get("user_id", "demo_user")
-    db_path = SESSIONS_DB.replace("sqlite:///", "")
-    
-    try:
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        cursor.execute("PRAGMA foreign_keys = ON")
-        
-        # Use LIKE for partial matching
-        cursor.execute('''
-            SELECT * FROM contact 
-            WHERE user_id = ? AND name LIKE ?
-            ORDER BY name
-        ''', (user_id, f"%{name}%"))
-        
-        contacts = [dict(row) for row in cursor.fetchall()]
-        
-        return {
-            "action": "find_contact_by_name",
-            "status": "success",
-            "search_term": name,
-            "matches_found": len(contacts),
-            "contacts": contacts,
-            "message": f"Found {len(contacts)} contacts matching '{name}'"
-        }
-        
-    except Exception as e:
-        return {
-            "action": "find_contact_by_name",
-            "status": "error",
-            "error": str(e),
-            "message": f"Failed to search for contact: {name}"
-        }
-    finally:
-        if conn:
-            conn.close()
-
-def find_contact_by_email(email: str, tool_context: ToolContext) -> dict:
-    """Find contact by email address.
-
-    Args:
-        email: Contact's email address
-        tool_context: Context for accessing session state
-
-    Returns:
-        Dictionary containing matching contact
-    """
-    print(f"--- Tool: find_contact_by_email called for: {email} ---")
-    
-    user_id = tool_context.state.get("user_id", "demo_user")
-    db_path = SESSIONS_DB.replace("sqlite:///", "")
-    
-    try:
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        cursor.execute("PRAGMA foreign_keys = ON")
-        
-        cursor.execute('''
-            SELECT * FROM contact 
-            WHERE user_id = ? AND email LIKE ?
-        ''', (user_id, f"%{email}%"))
-        
-        contacts = [dict(row) for row in cursor.fetchall()]
-        
-        return {
-            "action": "find_contact_by_email",
-            "status": "success",
-            "search_email": email,
-            "matches_found": len(contacts),
-            "contacts": contacts,
-            "message": f"Found {len(contacts)} contacts with email containing '{email}'"
-        }
-        
-    except Exception as e:
-        return {
-            "action": "find_contact_by_email",
-            "status": "error",
-            "error": str(e),
-            "message": f"Failed to search for email: {email}"
-        }
-    finally:
-        if conn:
-            conn.close()
-
-def find_contact_by_company(company: str, tool_context: ToolContext) -> dict:
-    """Find contacts by company name.
-
-    Args:
-        company: Company name (supports partial matching)
-        tool_context: Context for accessing session state
-
-    Returns:
-        Dictionary containing matching contacts
-    """
-    print(f"--- Tool: find_contact_by_company called for: {company} ---")
-    
-    user_id = tool_context.state.get("user_id", "demo_user")
-    db_path = SESSIONS_DB.replace("sqlite:///", "")
-    
-    try:
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        cursor.execute("PRAGMA foreign_keys = ON")
-        
-        cursor.execute('''
-            SELECT * FROM contact 
-            WHERE user_id = ? AND company LIKE ?
-            ORDER BY name
-        ''', (user_id, f"%{company}%"))
-        
-        contacts = [dict(row) for row in cursor.fetchall()]
-        
-        return {
-            "action": "find_contact_by_company",
-            "status": "success",
-            "search_company": company,
-            "matches_found": len(contacts),
-            "contacts": contacts,
-            "message": f"Found {len(contacts)} contacts from companies matching '{company}'"
-        }
-        
-    except Exception as e:
-        return {
-            "action": "find_contact_by_company",
-            "status": "error",
-            "error": str(e),
-            "message": f"Failed to search for company: {company}"
-        }
-    finally:
-        if conn:
-            conn.close()
-
-def update_contact_by_name(name: str, tool_context: ToolContext, new_name: str, 
-                          email: str, phone: str, company: str, 
-                          notes: str, status: str) -> dict:
-    """Update a contact by their name instead of ID.
-
-    Args:
-        name: Current name of the contact to update
-        tool_context: Context for accessing session state
-        new_name: New name for the contact
-        email: Updated email address
-        phone: Updated phone number
-        company: Updated company name
-        notes: Updated notes
-        status: Updated contact status
-
-    Returns:
-        Dictionary containing the result of updating the contact
-    """
-    print(f"--- Tool: update_contact_by_name called for: {name} ---")
-    
-    # First find the contact
-    find_result = find_contact_by_name(name, tool_context)
-    
-    if find_result["status"] != "success" or find_result["matches_found"] == 0:
-        return {
-            "action": "update_contact_by_name",
-            "status": "error",
-            "error": f"No contact found with name '{name}'",
-            "message": f"Cannot find contact '{name}' to update"
-        }
-    
-    if find_result["matches_found"] > 1:
-        return {
-            "action": "update_contact_by_name", 
-            "status": "error",
-            "error": f"Multiple contacts found with name '{name}'",
-            "found_contacts": find_result["contacts"],
-            "message": f"Found {find_result['matches_found']} contacts. Please be more specific or use contact ID."
-        }
-    
-    # Get the contact ID and update
-    contact = find_result["contacts"][0]
-    contact_id = contact["id"]
-    
-    # Use new_name if provided, otherwise keep current name
-    update_name = new_name if new_name and new_name.strip() else contact["name"]
-    
-    # Use existing values if new values are empty
-    update_email = email if email and email.strip() else contact["email"]
-    update_phone = phone if phone and phone.strip() else contact["phone"]  
-    update_company = company if company and company.strip() else contact["company"]
-    update_notes = notes if notes and notes.strip() else contact["notes"]
-    update_status = status if status and status.strip() else contact["status"]
-    
-    result = update_contact(contact_id, tool_context, update_name, update_email, update_phone, update_company, update_notes, update_status)
-    
-    # Enhance the success message to be more explicit
-    if result.get("status") == "success":
-        result["message"] = f"✅ Successfully updated contact '{name}' to '{update_name}'"
-        result["action"] = "update_contact_by_name"
-    
-    return result
 
 # INVOICE TOOLS
 def create_invoice(contact_id: int, tool_context: ToolContext, issue_date: str, due_date: str, 
@@ -822,6 +570,18 @@ def create_invoice(contact_id: int, tool_context: ToolContext, issue_date: str, 
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         cursor.execute("PRAGMA foreign_keys = ON")
+        
+        # Check if user exists, if not create them
+        cursor.execute("SELECT id FROM user WHERE id = ?", (user_id,))
+        user_exists = cursor.fetchone()
+        
+        if not user_exists:
+            print(f"User {user_id} doesn't exist, creating user entry...")
+            cursor.execute('''
+                INSERT INTO user (id, name, email, company, phone)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (user_id, user_id.replace('_', ' ').title(), f"{user_id}@example.com", "Unknown Company", "000-000-0000"))
+            print(f"Created user entry for {user_id}")
         
         # Verify contact exists
         cursor.execute("SELECT name, company FROM contact WHERE id = ? AND user_id = ?", (contact_id, user_id))
@@ -929,99 +689,6 @@ def read_invoice(invoice_id: int, tool_context: ToolContext) -> dict:
         if conn:
             conn.close()
 
-def update_invoice(invoice_id: int, tool_context: ToolContext, issue_date: str, due_date: str,
-                  total_amount: float, status: str, notes: str) -> dict:
-    """Update an existing invoice.
-
-    Args:
-        invoice_id: ID of the invoice to update
-        issue_date: Updated issue date (YYYY-MM-DD format)
-        due_date: Updated due date (YYYY-MM-DD format)
-        total_amount: Updated total amount
-        status: Updated status
-        notes: Updated notes
-        tool_context: Context for accessing session state
-
-    Returns:
-        Dictionary containing the result of updating the invoice
-    """
-    print(f"--- Tool: update_invoice called for invoice_id: {invoice_id} ---")
-    
-    user_id = tool_context.state.get("user_id", "demo_user")
-    db_path = SESSIONS_DB.replace("sqlite:///", "")
-    
-    try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        cursor.execute("PRAGMA foreign_keys = ON")
-        
-        # Check if invoice exists
-        cursor.execute("SELECT * FROM invoice WHERE id = ? AND user_id = ?", (invoice_id, user_id))
-        invoice = cursor.fetchone()
-        
-        if not invoice:
-            return {
-                "action": "update_invoice",
-                "status": "error",
-                "error": f"Invoice with ID {invoice_id} not found",
-                "message": f"Invoice {invoice_id} not found"
-            }
-        
-        # Build dynamic update query
-        update_fields = []
-        update_values = []
-        
-        if issue_date and issue_date.strip():
-            update_fields.append("issue_date = ?")
-            update_values.append(issue_date)
-        if due_date and due_date.strip():
-            update_fields.append("due_date = ?")
-            update_values.append(due_date)
-        if total_amount > 0:
-            update_fields.append("total_amount = ?")
-            update_values.append(total_amount)
-        if status and status.strip():
-            valid_statuses = ['unpaid', 'paid', 'overdue', 'cancelled']
-            if status.lower() in valid_statuses:
-                update_fields.append("status = ?")
-                update_values.append(status.lower())
-        if notes and notes.strip():
-            update_fields.append("notes = ?")
-            update_values.append(notes)
-        
-        if not update_fields:
-            return {
-                "action": "update_invoice",
-                "status": "warning",
-                "message": "No fields provided to update"
-            }
-        
-        update_values.extend([invoice_id, user_id])
-        update_query = f"UPDATE invoice SET {', '.join(update_fields)} WHERE id = ? AND user_id = ?"
-        
-        cursor.execute(update_query, update_values)
-        conn.commit()
-        
-        return {
-            "action": "update_invoice",
-            "status": "success",
-            "invoice_id": invoice_id,
-            "message": f"Successfully updated invoice {invoice_id}"
-        }
-        
-    except Exception as e:
-        if conn:
-            conn.rollback()
-        return {
-            "action": "update_invoice",
-            "status": "error",
-            "error": str(e),
-            "message": f"Failed to update invoice {invoice_id}"
-        }
-    finally:
-        if conn:
-            conn.close()
-
 def mark_invoice_paid(invoice_id: int, tool_context: ToolContext) -> dict:
     """Mark an invoice as paid and create revenue record.
 
@@ -1099,19 +766,16 @@ def mark_invoice_paid(invoice_id: int, tool_context: ToolContext) -> dict:
         if conn:
             conn.close()
 
-
-
-def find_invoices_by_contact_name(contact_name: str, tool_context: ToolContext) -> dict:
-    """Find all invoices for a contact by name.
+def get_unpaid_invoices(tool_context: ToolContext) -> dict:
+    """Get all unpaid invoices for the current user.
 
     Args:
-        contact_name: Name of the contact
         tool_context: Context for accessing session state
 
     Returns:
-        Dictionary containing invoices for the contact
+        Dictionary containing all unpaid invoices with contact details
     """
-    print(f"--- Tool: find_invoices_by_contact_name called for: {contact_name} ---")
+    print("--- Tool: get_unpaid_invoices called ---")
     
     user_id = tool_context.state.get("user_id", "demo_user")
     db_path = SESSIONS_DB.replace("sqlite:///", "")
@@ -1122,187 +786,49 @@ def find_invoices_by_contact_name(contact_name: str, tool_context: ToolContext) 
         cursor = conn.cursor()
         cursor.execute("PRAGMA foreign_keys = ON")
         
+        # Get all unpaid invoices with contact information
         cursor.execute('''
-            SELECT i.*, c.name as contact_name, c.company, c.email
-            FROM invoice i
-            JOIN contact c ON i.contact_id = c.id
-            WHERE i.user_id = ? AND c.name LIKE ?
-            ORDER BY i.issue_date DESC
-        ''', (user_id, f"%{contact_name}%"))
-        
-        invoices = [dict(row) for row in cursor.fetchall()]
-        
-        return {
-            "action": "find_invoices_by_contact_name",
-            "status": "success",
-            "contact_name": contact_name,
-            "invoices_found": len(invoices),
-            "invoices": invoices,
-            "message": f"Found {len(invoices)} invoices for contacts matching '{contact_name}'"
-        }
-        
-    except Exception as e:
-        return {
-            "action": "find_invoices_by_contact_name",
-            "status": "error",
-            "error": str(e),
-            "message": f"Failed to find invoices for: {contact_name}"
-        }
-    finally:
-        if conn:
-            conn.close()
-
-# ENHANCED INVOICE TOOLS
-def create_invoice_by_contact_name(contact_name: str, total_amount: float, 
-                                  tool_context: ToolContext, issue_date: str, 
-                                  due_date: str, status: str, 
-                                  notes: str) -> dict:
-    """Create an invoice using contact name instead of ID.
-
-    Args:
-        contact_name: Name of the contact
-        total_amount: Invoice total amount
-        tool_context: Context for accessing session state
-        issue_date: Invoice issue date
-        due_date: Invoice due date
-        status: Invoice status
-        notes: Additional notes
-
-    Returns:
-        Dictionary containing the result of creating the invoice
-    """
-    print(f"--- Tool: create_invoice_by_contact_name called for: {contact_name} ---")
-    
-    # Find the contact first
-    find_result = find_contact_by_name(contact_name, tool_context)
-    
-    if find_result["status"] != "success" or find_result["matches_found"] == 0:
-        return {
-            "action": "create_invoice_by_contact_name",
-            "status": "error",
-            "error": f"No contact found with name '{contact_name}'",
-            "message": f"Cannot find contact '{contact_name}' to create invoice"
-        }
-    
-    if find_result["matches_found"] > 1:
-        return {
-            "action": "create_invoice_by_contact_name",
-            "status": "error", 
-            "error": f"Multiple contacts found with name '{contact_name}'",
-            "found_contacts": find_result["contacts"],
-            "message": f"Found {find_result['matches_found']} contacts. Please be more specific."
-        }
-    
-    # Get contact ID and create invoice
-    contact = find_result["contacts"][0]
-    contact_id = contact["id"]
-    
-    return create_invoice(contact_id, tool_context, issue_date, due_date, total_amount, status, notes)
-
-def find_invoices_by_contact_name(contact_name: str, tool_context: ToolContext) -> dict:
-    """Find all invoices for a contact by name.
-
-    Args:
-        contact_name: Name of the contact
-        tool_context: Context for accessing session state
-
-    Returns:
-        Dictionary containing invoices for the contact
-    """
-    print(f"--- Tool: find_invoices_by_contact_name called for: {contact_name} ---")
-    
-    user_id = tool_context.state.get("user_id", "demo_user")
-    db_path = SESSIONS_DB.replace("sqlite:///", "")
-    
-    try:
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        cursor.execute("PRAGMA foreign_keys = ON")
-        
-        cursor.execute('''
-            SELECT i.*, c.name as contact_name, c.company, c.email
-            FROM invoice i
-            JOIN contact c ON i.contact_id = c.id
-            WHERE i.user_id = ? AND c.name LIKE ?
-            ORDER BY i.issue_date DESC
-        ''', (user_id, f"%{contact_name}%"))
-        
-        invoices = [dict(row) for row in cursor.fetchall()]
-        
-        return {
-            "action": "find_invoices_by_contact_name",
-            "status": "success",
-            "contact_name": contact_name,
-            "invoices_found": len(invoices),
-            "invoices": invoices,
-            "message": f"Found {len(invoices)} invoices for contacts matching '{contact_name}'"
-        }
-        
-    except Exception as e:
-        return {
-            "action": "find_invoices_by_contact_name",
-            "status": "error",
-            "error": str(e),
-            "message": f"Failed to find invoices for: {contact_name}"
-        }
-    finally:
-        if conn:
-            conn.close()
-
-def find_invoices_by_status(status: str, tool_context: ToolContext) -> dict:
-    """Find all invoices by status.
-
-    Args:
-        status: Invoice status (paid, unpaid, overdue, cancelled)
-        tool_context: Context for accessing session state
-
-    Returns:
-        Dictionary containing invoices with the specified status
-    """
-    print(f"--- Tool: find_invoices_by_status called for status: {status} ---")
-    
-    user_id = tool_context.state.get("user_id", "demo_user")
-    db_path = SESSIONS_DB.replace("sqlite:///", "")
-    
-    try:
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        cursor.execute("PRAGMA foreign_keys = ON")
-        
-        cursor.execute('''
-            SELECT i.*, c.name as contact_name, c.company, c.email
+            SELECT i.*, c.name as contact_name, c.company, c.email, c.phone
             FROM invoice i
             LEFT JOIN contact c ON i.contact_id = c.id
-            WHERE i.user_id = ? AND i.status = ?
+            WHERE i.user_id = ? AND i.status = 'unpaid'
             ORDER BY i.due_date ASC
-        ''', (user_id, status.lower()))
+        ''', (user_id,))
         
-        invoices = [dict(row) for row in cursor.fetchall()]
+        unpaid_invoices = [dict(row) for row in cursor.fetchall()]
         
-        total_amount = sum(inv['total_amount'] for inv in invoices)
+        # Calculate totals
+        total_outstanding = sum(invoice['total_amount'] for invoice in unpaid_invoices)
+        
+        # Check for overdue invoices
+        current_date = datetime.now().strftime("%Y-%m-%d")
+        overdue_invoices = [inv for inv in unpaid_invoices if inv['due_date'] and inv['due_date'] < current_date]
+        overdue_amount = sum(invoice['total_amount'] for invoice in overdue_invoices)
         
         return {
-            "action": "find_invoices_by_status",
+            "action": "get_unpaid_invoices",
             "status": "success",
-            "invoice_status": status.lower(),
-            "invoices_found": len(invoices),
-            "total_amount": total_amount,
-            "invoices": invoices,
-            "message": f"Found {len(invoices)} {status} invoices totaling ${total_amount:.2f}"
+            "unpaid_count": len(unpaid_invoices),
+            "total_outstanding": total_outstanding,
+            "overdue_count": len(overdue_invoices),
+            "overdue_amount": overdue_amount,
+            "unpaid_invoices": unpaid_invoices,
+            "overdue_invoices": overdue_invoices,
+            "message": f"Found {len(unpaid_invoices)} unpaid invoices totaling ${total_outstanding:,.2f}"
         }
         
     except Exception as e:
         return {
-            "action": "find_invoices_by_status",
+            "action": "get_unpaid_invoices",
             "status": "error",
             "error": str(e),
-            "message": f"Failed to find {status} invoices"
+            "message": "Failed to retrieve unpaid invoices"
         }
     finally:
         if conn:
             conn.close()
+
+
 
 # REVENUE TOOLS
 def create_revenue(invoice_id: int, amount: float, tool_context: ToolContext, date: str) -> dict:
@@ -1411,6 +937,18 @@ def create_expense(amount: float, category: str, tool_context: ToolContext, desc
         cursor = conn.cursor()
         cursor.execute("PRAGMA foreign_keys = ON")
         
+        # Check if user exists, if not create them
+        cursor.execute("SELECT id FROM user WHERE id = ?", (user_id,))
+        user_exists = cursor.fetchone()
+        
+        if not user_exists:
+            print(f"User {user_id} doesn't exist, creating user entry...")
+            cursor.execute('''
+                INSERT INTO user (id, name, email, company, phone)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (user_id, user_id.replace('_', ' ').title(), f"{user_id}@example.com", "Unknown Company", "000-000-0000"))
+            print(f"Created user entry for {user_id}")
+        
         cursor.execute('''
             INSERT INTO expense (user_id, amount, category, description, date)
             VALUES (?, ?, ?, ?, ?)
@@ -1471,6 +1009,18 @@ def create_event(title: str, tool_context: ToolContext, contact_id: int, date: s
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         cursor.execute("PRAGMA foreign_keys = ON")
+        
+        # Check if user exists, if not create them
+        cursor.execute("SELECT id FROM user WHERE id = ?", (user_id,))
+        user_exists = cursor.fetchone()
+        
+        if not user_exists:
+            print(f"User {user_id} doesn't exist, creating user entry...")
+            cursor.execute('''
+                INSERT INTO user (id, name, email, company, phone)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (user_id, user_id.replace('_', ' ').title(), f"{user_id}@example.com", "Unknown Company", "000-000-0000"))
+            print(f"Created user entry for {user_id}")
         
         # Verify contact exists if provided
         if contact_id and contact_id > 0:
@@ -1579,88 +1129,6 @@ def list_upcoming_events(tool_context: ToolContext) -> dict:
         if conn:
             conn.close()
 
-# ENHANCED INTERACTION TOOLS
-def log_interaction_by_contact_name(contact_name: str, tool_context: ToolContext, 
-                                   date: str, interaction_type: str, 
-                                   summary: str) -> dict:
-    """Log an interaction using contact name instead of ID.
-
-    Args:
-        contact_name: Name of the contact
-        tool_context: Context for accessing session state
-        date: Date of interaction
-        interaction_type: Type of interaction
-        summary: Summary of the interaction
-
-    Returns:
-        Dictionary containing the result of logging the interaction
-    """
-    print(f"--- Tool: log_interaction_by_contact_name called for: {contact_name} ---")
-    
-    # Find the contact first
-    find_result = find_contact_by_name(contact_name, tool_context)
-    
-    if find_result["status"] != "success" or find_result["matches_found"] == 0:
-        return {
-            "action": "log_interaction_by_contact_name",
-            "status": "error",
-            "error": f"No contact found with name '{contact_name}'",
-            "message": f"Cannot find contact '{contact_name}' to log interaction"
-        }
-    
-    if find_result["matches_found"] > 1:
-        return {
-            "action": "log_interaction_by_contact_name",
-            "status": "error",
-            "error": f"Multiple contacts found with name '{contact_name}'",
-            "found_contacts": find_result["contacts"],
-            "message": f"Found {find_result['matches_found']} contacts. Please be more specific."
-        }
-    
-    # Get contact ID and log interaction
-    contact = find_result["contacts"][0]
-    contact_id = contact["id"]
-    
-    return log_interaction(contact_id, tool_context, date, interaction_type, summary)
-
-def read_interactions_by_contact_name(contact_name: str, tool_context: ToolContext) -> dict:
-    """Read interactions using contact name instead of ID.
-
-    Args:
-        contact_name: Name of the contact
-        tool_context: Context for accessing session state
-
-    Returns:
-        Dictionary containing interaction history
-    """
-    print(f"--- Tool: read_interactions_by_contact_name called for: {contact_name} ---")
-    
-    # Find the contact first
-    find_result = find_contact_by_name(contact_name, tool_context)
-    
-    if find_result["status"] != "success" or find_result["matches_found"] == 0:
-        return {
-            "action": "read_interactions_by_contact_name",
-            "status": "error",
-            "error": f"No contact found with name '{contact_name}'",
-            "message": f"Cannot find contact '{contact_name}' to read interactions"
-        }
-    
-    if find_result["matches_found"] > 1:
-        return {
-            "action": "read_interactions_by_contact_name",
-            "status": "error",
-            "error": f"Multiple contacts found with name '{contact_name}'",
-            "found_contacts": find_result["contacts"],
-            "message": f"Found {find_result['matches_found']} contacts. Please be more specific."
-        }
-    
-    # Get contact ID and read interactions
-    contact = find_result["contacts"][0]
-    contact_id = contact["id"]
-    
-    return read_interactions(contact_id, tool_context)
-
 # INTERACTION TOOLS
 def log_interaction(contact_id: int, tool_context: ToolContext, date: str, 
                    interaction_type: str, summary: str) -> dict:
@@ -1693,6 +1161,18 @@ def log_interaction(contact_id: int, tool_context: ToolContext, date: str,
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         cursor.execute("PRAGMA foreign_keys = ON")
+        
+        # Check if user exists, if not create them
+        cursor.execute("SELECT id FROM user WHERE id = ?", (user_id,))
+        user_exists = cursor.fetchone()
+        
+        if not user_exists:
+            print(f"User {user_id} doesn't exist, creating user entry...")
+            cursor.execute('''
+                INSERT INTO user (id, name, email, company, phone)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (user_id, user_id.replace('_', ' ').title(), f"{user_id}@example.com", "Unknown Company", "000-000-0000"))
+            print(f"Created user entry for {user_id}")
         
         # Verify contact exists
         cursor.execute("SELECT name FROM contact WHERE id = ? AND user_id = ?", (contact_id, user_id))
@@ -1800,122 +1280,6 @@ def read_interactions(contact_id: int, tool_context: ToolContext) -> dict:
     finally:
         if conn:
             conn.close()
-
-# COMMUNICATION TOOLS
-def send_email(contact_id: int, subject: str, message: str, tool_context: ToolContext) -> dict:
-    """Send email to a contact (simulated).
-
-    Args:
-        contact_id: ID of the contact
-        subject: Email subject
-        message: Email message
-        tool_context: Context for accessing session state
-
-    Returns:
-        Dictionary containing the result of sending email
-    """
-    print(f"--- Tool: send_email called for contact_id: {contact_id} ---")
-    
-    user_id = tool_context.state.get("user_id", "demo_user")
-    db_path = SESSIONS_DB.replace("sqlite:///", "")
-    
-    try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        cursor.execute("PRAGMA foreign_keys = ON")
-        
-        # Verify contact exists and get email
-        cursor.execute("SELECT name, email FROM contact WHERE id = ? AND user_id = ?", (contact_id, user_id))
-        contact = cursor.fetchone()
-        
-        if not contact:
-            return {
-                "action": "send_email",
-                "status": "error",
-                "error": f"Contact with ID {contact_id} not found",
-                "message": f"Contact {contact_id} not found"
-            }
-        
-        if not contact[1]:  # email column
-            return {
-                "action": "send_email",
-                "status": "error",
-                "error": f"No email address found for {contact[0]}",
-                "message": f"No email address for {contact[0]}"
-            }
-        
-        # Log this as an interaction
-        current_date = datetime.now().strftime("%Y-%m-%d")
-        cursor.execute('''
-            INSERT INTO interaction (user_id, contact_id, date, type, summary)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (user_id, contact_id, current_date, 'email', f"Sent email: {subject}"))
-        
-        conn.commit()
-        
-        return {
-            "action": "send_email",
-            "status": "success",
-            "contact_id": contact_id,
-            "contact_name": contact[0],
-            "email": contact[1],
-            "subject": subject,
-            "message": f"Email sent to {contact[0]} ({contact[1]})"
-        }
-        
-    except Exception as e:
-        if conn:
-            conn.rollback()
-        return {
-            "action": "send_email",
-            "status": "error",
-            "error": str(e),
-            "message": f"Failed to send email to contact {contact_id}"
-        }
-    finally:
-        if conn:
-            conn.close()
-
-def send_email_by_contact_name(contact_name: str, subject: str, message: str, 
-                              tool_context: ToolContext) -> dict:
-    """Send email using contact name instead of ID.
-
-    Args:
-        contact_name: Name of the contact
-        subject: Email subject
-        message: Email message
-        tool_context: Context for accessing session state
-
-    Returns:
-        Dictionary containing the result of sending email
-    """
-    print(f"--- Tool: send_email_by_contact_name called for: {contact_name} ---")
-    
-    # Find the contact first
-    find_result = find_contact_by_name(contact_name, tool_context)
-    
-    if find_result["status"] != "success" or find_result["matches_found"] == 0:
-        return {
-            "action": "send_email_by_contact_name",
-            "status": "error",
-            "error": f"No contact found with name '{contact_name}'",
-            "message": f"Cannot find contact '{contact_name}' to send email"
-        }
-    
-    if find_result["matches_found"] > 1:
-        return {
-            "action": "send_email_by_contact_name",
-            "status": "error",
-            "error": f"Multiple contacts found with name '{contact_name}'",
-            "found_contacts": find_result["contacts"],
-            "message": f"Found {find_result['matches_found']} contacts. Please be more specific."
-        }
-    
-    # Get contact and send email
-    contact = find_result["contacts"][0]
-    contact_id = contact["id"]
-    
-    return send_email(contact_id, subject, message, tool_context)
 
 # REPORTING TOOLS
 def generate_report(report_type: str, tool_context: ToolContext, period: str) -> dict:
@@ -2185,3 +1549,136 @@ def _generate_interaction_report(user_id: str, period: str) -> dict:
     finally:
         if conn:
             conn.close()
+
+def profit_loss_report(period: str, tool_context: ToolContext) -> dict:
+    """Generate profit and loss report.
+    
+    Args:
+        period: Time period (this_month, last_month, this_quarter, this_year, all_time)
+        tool_context: Context for accessing session state
+    Returns:
+        Dictionary containing the requested report
+    """
+    
+    db_path = SESSIONS_DB.replace("sqlite:///", "")
+    user_id = tool_context.state.get("user_id", "demo_user")
+    
+    try:
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA foreign_keys = ON")
+        
+        # Get all revenue data
+        cursor.execute('''
+            SELECT r.*, i.contact_id, c.name as contact_name, c.company
+            FROM revenue r
+            JOIN invoice i ON r.invoice_id = i.id
+            LEFT JOIN contact c ON i.contact_id = c.id
+            WHERE i.user_id = ?
+        ''', (user_id,))
+        
+        revenues = [dict(row) for row in cursor.fetchall()]
+        total_revenue = sum(rev['amount'] for rev in revenues)
+        
+        # Get all expense data
+        cursor.execute("SELECT * FROM expense WHERE user_id = ?", (user_id,))
+        expenses = [dict(row) for row in cursor.fetchall()]
+        total_expenses = sum(exp['amount'] for exp in expenses)
+        
+        # Calculate profit/loss
+        net_profit_loss = total_revenue - total_expenses
+        profit_margin = (net_profit_loss / total_revenue * 100) if total_revenue > 0 else 0
+        
+        # Group expenses by category for detailed breakdown
+        expense_breakdown = {}
+        for expense in expenses:
+            category = expense['category']
+            expense_breakdown[category] = expense_breakdown.get(category, 0) + expense['amount']
+        
+        # Determine financial status
+        if net_profit_loss > 0:
+            financial_status = "profitable"
+            status_message = f"Business is profitable with ${net_profit_loss:.2f} net profit"
+        elif net_profit_loss < 0:
+            financial_status = "loss"
+            status_message = f"Business has a loss of ${abs(net_profit_loss):.2f}"
+        else:
+            financial_status = "breakeven"
+            status_message = "Business is at breakeven point"
+        
+        return {
+            "action": "generate_report",
+            "status": "success",
+            "report_type": "profit_loss",
+            "period": period,
+            "financial_summary": {
+                "total_revenue": total_revenue,
+                "total_expenses": total_expenses,
+                "net_profit_loss": net_profit_loss,
+                "profit_margin": profit_margin,
+                "financial_status": financial_status
+            },
+            "revenue_details": {
+                "revenue_count": len(revenues),
+                "revenue_entries": revenues
+            },
+            "expense_details": {
+                "expense_count": len(expenses),
+                "expense_breakdown": expense_breakdown,
+                "expense_entries": expenses
+            },
+            "insights": [
+                status_message,
+                f"Profit margin: {profit_margin:.2f}%",
+                f"Revenue from {len(revenues)} transactions",
+                f"Expenses across {len(expense_breakdown)} categories"
+            ],
+            "message": f"P&L report generated: {status_message}"
+        }
+        
+    except Exception as e:
+        return {
+            "action": "generate_report",
+            "status": "error",
+            "error": str(e),
+            "message": "Failed to generate profit and loss report"
+        }
+    finally:
+        if conn:
+            conn.close()
+            
+def get_current_datetime() -> dict:
+    """Get the current date and time.
+
+    Returns:
+        Dictionary containing current date and time information
+    """
+    print("--- Tool: get_current_datetime called ---")
+    
+    try:
+        from datetime import datetime
+        
+        now = datetime.now()
+        
+        return {
+            "action": "get_current_datetime",
+            "status": "success",
+            "current_datetime": now.isoformat(),
+            "formatted_date": now.strftime("%Y-%m-%d"),
+            "formatted_time": now.strftime("%H:%M:%S"),
+            "formatted_datetime": now.strftime("%Y-%m-%d %H:%M:%S"),
+            "day_of_week": now.strftime("%A"),
+            "month_name": now.strftime("%B"),
+            "year": now.year,
+            "message": f"Current date and time: {now.strftime('%Y-%m-%d %H:%M:%S')}"
+        }
+        
+    except Exception as e:
+        return {
+            "action": "get_current_datetime",
+            "status": "error",
+            "error": str(e),
+            "message": "Failed to get current date and time"
+        }
+

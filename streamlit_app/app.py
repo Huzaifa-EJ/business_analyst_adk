@@ -10,7 +10,7 @@ from datetime import datetime
 import time
 
 # Configuration
-FLASK_API_URL = "http://localhost:5000"
+FLASK_API_URL = "https://dc01-39-62-194-48.ngrok-free.app"
 
 # Page configuration
 st.set_page_config(

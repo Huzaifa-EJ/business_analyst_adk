@@ -143,34 +143,35 @@ def chat():
             # Process events to get response
             agent_response = None
             tool_calls_count = 0
+            all_text_parts = []
             
             print(f"Got {len(event_list)} events")
             
             for i, event in enumerate(event_list):
                 print(f"Event {i}: {type(event).__name__}")
                 
-                # Check for final response
-                if hasattr(event, 'is_final_response') and event.is_final_response():
-                    if hasattr(event, 'content') and event.content and event.content.parts:
-                        agent_response = event.content.parts[0].text
-                        print(f"Got final response: {agent_response[:100]}...")
-                        break
-                
-                # Look for any content
+                # Look for any content in events
                 if hasattr(event, 'content') and event.content:
                     if hasattr(event.content, 'parts') and event.content.parts:
                         for part in event.content.parts:
                             # Check for text content
-                            if hasattr(part, 'text') and part.text:
-                                agent_response = part.text
-                                print(f"Found text response: {agent_response[:100]}...")
+                            if hasattr(part, 'text') and part.text and part.text.strip():
+                                text = part.text.strip()
+                                all_text_parts.append(text)
+                                print(f"Found text: {text[:100]}...")
                             # Check for function calls
                             elif hasattr(part, 'function_call') and part.function_call:
                                 tool_calls_count += 1
                                 print(f"Found tool call: {part.function_call}")
             
+            # Combine all text parts or use the last meaningful one
+            if all_text_parts:
+                # Use the last non-empty text part as the final response
+                agent_response = all_text_parts[-1]
+                print(f"Using final text response: {agent_response[:100]}...")
+            
             # Return response
-            if agent_response:
+            if agent_response and agent_response.strip():
                 return jsonify({
                     'response': agent_response,
                     'session_id': session_id,
@@ -179,15 +180,16 @@ def chat():
                     'timestamp': datetime.now().isoformat()
                 })
             else:
-                # Fallback response
+                # Fallback response when no text response is found
                 return jsonify({
-                    'response': "Hello! I'm your business assistant. I can help you check unpaid invoices, review revenue, analyze expenses, and provide business insights. What would you like to know?",
+                    'response': "Hello! I'm your business assistant. I can help you check unpaid invoices, manage contacts, create invoices, track expenses, and provide business insights. What would you like to know?",
                     'session_id': session_id,
                     'tool_calls': tool_calls_count,
                     'events_processed': len(event_list),
                     'fallback': True,
                     'timestamp': datetime.now().isoformat()
                 })
+            
                 
         except Exception as e:
             print(f"Error running agent: {e}")
