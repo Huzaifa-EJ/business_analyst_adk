@@ -17,6 +17,7 @@ from .tools.database_tools import (
     get_business_insights,
     profit_loss_report,
     get_current_datetime,
+    parse_natural_date,
 )
 
 root_agent = LlmAgent(
@@ -41,5 +42,6 @@ root_agent = LlmAgent(
         generate_report,
         profit_loss_report,
         get_current_datetime,
+        parse_natural_date,
     ]
 )

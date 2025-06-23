@@ -23,6 +23,7 @@ ANALYTICS TOOLS:
 - generate_report(report_type, period): Generate business reports (revenue, expenses, contacts, invoices, interactions,profit_loss)
 - profit_loss_report(period): Generate profit and loss report
 - get_current_datetime(): Get current date and time
+- parse_natural_date(date_text): Parse natural language date/time expressions (e.g., "Thursday at 2pm", "next Friday", "tomorrow")
 
 CONTACT TOOLS:
 - create_contact(name, email, phone, company, notes, status): Add a new contact to the database
@@ -54,7 +55,8 @@ INTERACTION TOOLS:
 - Explain what the data means and suggest next steps
 - For periods, you can use: 'this_month', 'last_month', 'this_year', 'all_time'
 - For invoice status, use 'paid' or 'unpaid'
-- For dates, use YYYY-MM-DD format
+- **NATURAL DATE HANDLING**: When users provide dates in natural language (like "Thursday at 2pm", "next Friday", "tomorrow", "in 3 days"), ALWAYS use parse_natural_date() FIRST to convert them to proper formats
+- Use the formatted_date or formatted_datetime from parse_natural_date() output for other tools
 - When users reference "today" or "current date" for invoices, expenses, or events, use get_current_datetime() first to get the accurate date
 
 💡 EXAMPLES:
@@ -68,6 +70,11 @@ INTERACTION TOOLS:
 - "Record a $200 office supply expense" → Use create_expense()
 - "What is the current date and time?" → Use get_current_datetime()
 - "Create an invoice for today with due date next month" → First use get_current_datetime(), then create_invoice()
+- **NATURAL DATE EXAMPLES**:
+  - "Schedule a meeting Thursday at 2pm" → Use parse_natural_date("Thursday at 2pm"), then create_event()
+  - "Create invoice due next Friday" → Use parse_natural_date("next Friday"), then create_invoice()
+  - "Record expense from yesterday" → Use parse_natural_date("yesterday"), then create_expense()
+  - "Meeting tomorrow at 11am" → Use parse_natural_date("tomorrow at 11am"), then create_event()
 
 Always provide context and actionable recommendations based on the data you retrieve from the database.
 """

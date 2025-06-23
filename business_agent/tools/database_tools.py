@@ -1,6 +1,9 @@
 from google.adk.tools import ToolContext
 import sqlite3
 from datetime import datetime
+from dateutil import parser as date_parser
+from dateutil.relativedelta import relativedelta
+import re
 
 SESSIONS_DB = "sqlite:///./business_agent.db"
 
@@ -1648,6 +1651,135 @@ def profit_loss_report(period: str, tool_context: ToolContext) -> dict:
         if conn:
             conn.close()
             
+def parse_natural_date(date_text: str) -> dict:
+    """Parse natural language date/time expressions into standard formats.
+    
+    Args:
+        date_text: Natural language date/time string (e.g., "Thursday at 2pm", "next Friday at 11am", "tomorrow", "in 3 days")
+        
+    Returns:
+        Dictionary containing parsed date information in multiple formats
+    """
+    print(f"--- Tool: parse_natural_date called with: '{date_text}' ---")
+    
+    try:
+        # Get current date as reference point
+        now = datetime.now()
+        
+        # Clean the input text
+        date_text = date_text.strip().lower()
+        
+        # Handle special cases first
+        if date_text in ['today', 'now']:
+            parsed_date = now
+        elif date_text in ['tomorrow']:
+            parsed_date = now + relativedelta(days=1)
+        elif date_text in ['yesterday']:
+            parsed_date = now - relativedelta(days=1)
+        elif 'next week' in date_text:
+            parsed_date = now + relativedelta(weeks=1)
+        elif 'next month' in date_text:
+            parsed_date = now + relativedelta(months=1)
+        else:
+            # Handle relative expressions like "in 3 days", "in 2 weeks"
+            relative_match = re.search(r'in (\d+) (day|days|week|weeks|month|months)', date_text)
+            if relative_match:
+                number = int(relative_match.group(1))
+                unit = relative_match.group(2)
+                
+                if 'day' in unit:
+                    parsed_date = now + relativedelta(days=number)
+                elif 'week' in unit:
+                    parsed_date = now + relativedelta(weeks=number)
+                elif 'month' in unit:
+                    parsed_date = now + relativedelta(months=number)
+                else:
+                    parsed_date = now
+            else:
+                # Try parsing with dateutil - it handles many natural language formats
+                try:
+                    parsed_date = date_parser.parse(date_text, default=now, fuzzy=True)
+                except:
+                    # If parsing fails, try with some preprocessing
+                    # Handle day names with times
+                    day_time_match = re.search(r'(monday|tuesday|wednesday|thursday|friday|saturday|sunday).*?(\d{1,2})(am|pm)', date_text)
+                    if day_time_match:
+                        day_name = day_time_match.group(1)
+                        hour = int(day_time_match.group(2))
+                        ampm = day_time_match.group(3)
+                        
+                        if ampm == 'pm' and hour != 12:
+                            hour += 12
+                        elif ampm == 'am' and hour == 12:
+                            hour = 0
+                        
+                        # Find next occurrence of the day
+                        days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+                        target_day = days.index(day_name)
+                        current_day = now.weekday()
+                        
+                        days_ahead = target_day - current_day
+                        if days_ahead <= 0:  # Target day already happened this week
+                            days_ahead += 7
+                        
+                        parsed_date = now + relativedelta(days=days_ahead)
+                        parsed_date = parsed_date.replace(hour=hour, minute=0, second=0, microsecond=0)
+                    else:
+                        # Final fallback - just parse what we can
+                        parsed_date = date_parser.parse(date_text, default=now, fuzzy=True)
+        
+        # Format the parsed date in various useful formats
+        return {
+            "action": "parse_natural_date",
+            "status": "success",
+            "original_input": date_text,
+            "parsed_datetime": parsed_date.isoformat(),
+            "formatted_date": parsed_date.strftime("%Y-%m-%d"),
+            "formatted_time": parsed_date.strftime("%H:%M:%S"),
+            "formatted_datetime": parsed_date.strftime("%Y-%m-%d %H:%M:%S"),
+            "formatted_display": parsed_date.strftime("%A, %B %d, %Y at %I:%M %p"),
+            "day_of_week": parsed_date.strftime("%A"),
+            "relative_description": _get_relative_description(parsed_date, now),
+            "timestamp": parsed_date.timestamp(),
+            "message": f"Parsed '{date_text}' as {parsed_date.strftime('%Y-%m-%d %H:%M:%S')}"
+        }
+        
+    except Exception as e:
+        return {
+            "action": "parse_natural_date",
+            "status": "error",
+            "error": str(e),
+            "original_input": date_text,
+            "message": f"Failed to parse date: '{date_text}'. Please try a different format."
+        }
+
+def _get_relative_description(target_date: datetime, reference_date: datetime) -> str:
+    """Generate a human-readable relative description of the date."""
+    delta = target_date - reference_date
+    
+    if delta.days == 0:
+        return "today"
+    elif delta.days == 1:
+        return "tomorrow"
+    elif delta.days == -1:
+        return "yesterday"
+    elif 0 < delta.days < 7:
+        return f"in {delta.days} days"
+    elif delta.days < 0 and delta.days > -7:
+        return f"{abs(delta.days)} days ago"
+    elif delta.days >= 7:
+        weeks = delta.days // 7
+        if weeks == 1:
+            return "next week"
+        else:
+            return f"in {weeks} weeks"
+    else:
+        weeks = abs(delta.days) // 7
+        if weeks == 1:
+            return "last week"
+        else:
+            return f"{weeks} weeks ago"
+
 def get_current_datetime() -> dict:
     """Get the current date and time.
 
