@@ -127,66 +127,7 @@ def main():
             st.warning("Make sure your Flask app is running on http://localhost:5000")
         
         st.divider()
-        
-        # Quick Business Data Queries
-        st.subheader("📊 Quick Queries")
-        
-        if st.button("💰 Business Insights"):
-            if health_status:
-                with st.spinner("Getting business insights..."):
-                    success, data = get_business_data("insights", user_id)
-                    if success:
-                        st.json(data)
-                    else:
-                        st.error(f"Error: {data.get('error', 'Unknown error')}")
-        
-        if st.button("📈 Revenue Report"):
-            if health_status:
-                with st.spinner("Getting revenue report..."):
-                    success, data = get_business_data("report", user_id, "revenue")
-                    if success:
-                        st.json(data)
-                    else:
-                        st.error(f"Error: {data.get('error', 'Unknown error')}")
-        
-        if st.button("💸 Expense Report"):
-            if health_status:
-                with st.spinner("Getting expense report..."):
-                    success, data = get_business_data("report", user_id, "expenses")
-                    if success:
-                        st.json(data)
-                    else:
-                        st.error(f"Error: {data.get('error', 'Unknown error')}")
-        
-        if st.button("👥 Contact Report"):
-            if health_status:
-                with st.spinner("Getting contact report..."):
-                    success, data = get_business_data("report", user_id, "contacts")
-                    if success:
-                        st.json(data)
-                    else:
-                        st.error(f"Error: {data.get('error', 'Unknown error')}")
-        
-        if st.button("📋 Invoice Report"):
-            if health_status:
-                with st.spinner("Getting invoice report..."):
-                    success, data = get_business_data("report", user_id, "invoices")
-                    if success:
-                        st.json(data)
-                    else:
-                        st.error(f"Error: {data.get('error', 'Unknown error')}")
-        
-        if st.button("🔍 Raw Data"):
-            if health_status:
-                with st.spinner("Getting raw data..."):
-                    success, data = get_business_data("raw", user_id)
-                    if success:
-                        st.json(data)
-                    else:
-                        st.error(f"Error: {data.get('error', 'Unknown error')}")
-        
-        st.divider()
-        
+            
         # Session Information
         st.subheader("📝 Session Info")
         if st.button("Show Sessions"):
